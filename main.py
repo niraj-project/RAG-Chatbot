@@ -9,15 +9,12 @@ from collections import deque
 from sentence_transformers import SentenceTransformer
 from flask import Flask, request, jsonify, render_template
 
-# --------- Pinecone Initialization ---------
 PINECONE_API_KEY = "b2e45273-9712-42d0-bbfb-d989381add1d"
 PINECONE_INDEX_NAME = "cyber-security"
 PINECONE_ENVIRONMENT = "us-east-1"
 
-# Initialize Pinecone client
 pc = Pinecone(api_key=PINECONE_API_KEY)
 
-# Check if the index exists, if not, create it
 if PINECONE_INDEX_NAME not in pc.list_indexes().names():
     pc.create_index(
         name=PINECONE_INDEX_NAME,
@@ -26,20 +23,15 @@ if PINECONE_INDEX_NAME not in pc.list_indexes().names():
         spec=ServerlessSpec(cloud='gcp', region=PINECONE_ENVIRONMENT)
     )
 
-# Connect to the Pinecone index
 index = pc.Index(PINECONE_INDEX_NAME)
 
-# Initialize Sentence Transformer Model
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# --------- Memory for Last 3 Lines ---------
 conversation_memory = deque(maxlen=3)
 
-# --------- Upsert Vectors into Pinecone ---------
 def upsert_vectors(vectors, namespace="default"):
     index.upsert(vectors=vectors, namespace=namespace)
 
-# --------- CSV to Vectors for Pinecone ---------
 def embed_text(text):
     return model.encode(text).tolist()
 
@@ -59,7 +51,6 @@ def insert_csv_vectors(csv_file_path, namespace="default"):
         documents[doc_id] = row['Content']
     upsert_vectors(vectors, namespace)
 
-# --------- Query Pinecone ---------
 def query_vector_db(user_query, namespace="default"):
     query_vector = embed_text(user_query)
     response = index.query(
@@ -72,7 +63,6 @@ def query_vector_db(user_query, namespace="default"):
     relevant_doc_ids = [match['id'] for match in response['matches']]
     return relevant_doc_ids
 
-# --------- Claude v1 API Call ---------
 logging.basicConfig(level=logging.INFO, filename="error_log.log", filemode="w")
 API_KEY = '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'
 API_URL="https://openrouter.ai/api/v1"
@@ -91,7 +81,6 @@ def basic_chatbot_conversation(user_query):
         response = requests.post(API_URL, headers=headers, json=payload)
         response.raise_for_status()
 
-        # Log the full response for debugging
         logging.info(f"API Response: {response.json()}")
 
         response_json = response.json()
@@ -111,7 +100,6 @@ def basic_chatbot_conversation(user_query):
         logging.error("Error: Unexpected response structure from the API.")
         return "Error: Unexpected response structure from the API."
 
-# --------- RAG Implementation ---------
 def rag_chatbot_conversation(user_query):
     relevant_doc_ids = query_vector_db(user_query)
     relevant_docs = [documents[doc_id] for doc_id in relevant_doc_ids]
@@ -127,7 +115,6 @@ def rag_chatbot_conversation(user_query):
     
     return response
 
-# --------- Flask App ---------
 app = Flask(__name__)
 
 @app.route('/')
